@@ -1,0 +1,40 @@
+# .NET Build artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Tt]est[Rr]esults/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# Local & sensitive configurations
+appsettings.Development.json
+appsettings.Local.json
+*.local.json
+.env
+
+# Documents, images & backups
+*.docx
+*.doc
+*.pdf
+*.zip
+backups/
+screenshots_chapter4/
+so_do_thiet_ke_uml/
+docs/
+.agents/
+scripts/
+AGENTS.md
+PROJECT.md
+PROJECT_MEMORY.md
+Directory.Build.props
+
+# Deprecated multi-layer folders (Only 1 project src/ItTms is active)
+src/ItTms.Domain/
+src/ItTms.Application/
+src/ItTms.Infrastructure/
+src/ItTms.Web/
+tests/
