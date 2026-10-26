@@ -1,0 +1,2 @@
+# Worker M4 Workspace
+Working directory for worker_m4 (22 Views Palette & KPI Neutral Synchronization).

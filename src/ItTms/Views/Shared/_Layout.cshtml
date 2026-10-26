@@ -1,0 +1,331 @@
+@using ItTms.Models.Enums
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var pageTitle = ViewData["Title"]?.ToString() ?? "Cổng Hỗ trợ Kỹ thuật";
+    bool hideTaskbar = ViewData["HideTaskbar"] as bool? ?? false;
+
+    string IsActive(string controller, string? action = null)
+    {
+        bool matchCtrl = string.Equals(currentController, controller, StringComparison.OrdinalIgnoreCase);
+        bool matchAct = action == null || string.Equals(currentAction, action, StringComparison.OrdinalIgnoreCase);
+        return (matchCtrl && matchAct) ? "active" : "";
+    }
+
+    string roleLabel = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value switch
+    {
+        RoleNames.Admin => "Quản trị viên",
+        RoleNames.Leader => "Trưởng nhóm IT",
+        RoleNames.Staff => "Kỹ thuật viên",
+        RoleNames.User => "Người dùng",
+        _ => "Cổng Xác thực"
+    };
+}
+<!DOCTYPE html>
+<html lang="vi" data-bs-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@pageTitle - IT-TMS Enterprise Helpdesk</title>
+
+    <!-- Ngăn ngừa hiện tượng FOUC giật sáng màn hình -->
+    <script>
+        (function () {
+            const theme = localStorage.getItem('it-tms-theme') || 
+                (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+
+    <!-- Geist & Geist Mono Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Bootstrap 5 CSS & IT-TMS Modern SaaS Design System -->
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body data-authenticated="@(User.Identity?.IsAuthenticated == true ? "true" : "false")">
+    <!-- Nạp Thư viện SVG Sprite -->
+    @await Html.PartialAsync("_SvgIcons")
+
+    @if (!hideTaskbar)
+    {
+        <!-- =====================================================================
+             TOP HORIZONTAL TASKBAR SHELL
+             ===================================================================== -->
+        <header class="app-shell-header">
+            <!-- TIER 1: PRIMARY FROSTED-GLASS HORIZONTAL TASKBAR -->
+            <nav class="navbar navbar-expand-lg app-taskbar">
+                <div class="container-fluid px-3 px-lg-4" style="max-width: 1400px;">
+                    <!-- Brand Identity -->
+                    <a class="app-brand" asp-controller="Home" asp-action="Index">
+                        <span class="app-brand-mark">
+                            <svg class="bi" width="18" height="18"><use xlink:href="#shield-check"/></svg>
+                        </span>
+                        <span>IT-TMS</span>
+                        <span class="app-brand-badge">SERVICE DESK</span>
+                    </a>
+
+                    <div class="taskbar-divider d-none d-lg-block"></div>
+
+                    <!-- Mobile Toggle Button -->
+                    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
+                            aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <!-- Navigation Content -->
+                    <div class="collapse navbar-collapse" id="navbarContent">
+                        <!-- Left Menu (Role-Based Dynamic Horizontal Taskbar) -->
+                        <ul class="navbar-nav taskbar-nav me-auto mb-2 mb-lg-0 mt-2 mt-lg-0">
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                @if (User.IsInRole(RoleNames.User))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Ticket", "Dashboard")" asp-controller="Ticket" asp-action="Dashboard">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#speedometer2"/></svg>
+                                            <span>Dashboard</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Ticket", "Index")" asp-controller="Ticket" asp-action="Index">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#ticket-perforated"/></svg>
+                                            <span>Yêu cầu của tôi</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Ticket", "Create")" asp-controller="Ticket" asp-action="Create">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#plus-circle"/></svg>
+                                            <span>Tạo yêu cầu</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (User.IsInRole(RoleNames.Staff))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Staff", "Dashboard")" asp-controller="Staff" asp-action="Dashboard">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#speedometer2"/></svg>
+                                            <span>Dashboard</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Staff", "Assigned")" asp-controller="Staff" asp-action="Assigned">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#ticket-perforated"/></svg>
+                                            <span>Việc được giao</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Staff", "History")" asp-controller="Staff" asp-action="History">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#clock"/></svg>
+                                            <span>Lịch sử xử lý</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (User.IsInRole(RoleNames.Leader))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Leader", "Dashboard")" asp-controller="Leader" asp-action="Dashboard">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#speedometer2"/></svg>
+                                            <span>Dashboard</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Leader", "NewQueue")" asp-controller="Leader" asp-action="NewQueue">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#ticket-perforated"/></svg>
+                                            <span>Hàng đợi phân công</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Leader", "Index")" asp-controller="Leader" asp-action="Index">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#journal-text"/></svg>
+                                            <span>Tất cả yêu cầu</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (User.IsInRole(RoleNames.Admin))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Admin", "Dashboard")" asp-controller="Admin" asp-action="Dashboard">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#speedometer2"/></svg>
+                                            <span>Dashboard</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Admin", "Users")" asp-controller="Admin" asp-action="Users">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#people-fill"/></svg>
+                                            <span>Người dùng</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Admin", "Roles")" asp-controller="Admin" asp-action="Roles">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#shield-check"/></svg>
+                                            <span>Phân quyền</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link @IsActive("Admin", "Audit")" asp-controller="Admin" asp-action="Audit">
+                                            <svg class="bi" width="15" height="15"><use xlink:href="#journal-text"/></svg>
+                                            <span>Nhật ký kiểm toán</span>
+                                        </a>
+                                    </li>
+                                }
+                            }
+                        </ul>
+
+                        <!-- Right Controls: Theme Toggle, Notifications, User Menu -->
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Theme Toggle Button -->
+                            <button class="btn taskbar-icon-btn" 
+                                    id="btnThemeToggle" title="Chuyển đổi giao diện Sáng/Tối" type="button">
+                                <svg class="bi" width="16" height="16" id="themeIcon"><use xlink:href="#moon-fill"/></svg>
+                            </button>
+
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                <!-- SignalR Notification Bell Dropdown -->
+                                <div class="dropdown">
+                                    <button class="btn taskbar-icon-btn position-relative" 
+                                            type="button" id="notificationDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Thông báo thời gian thực">
+                                        <svg class="bi" width="16" height="16"><use xlink:href="#bell-fill"/></svg>
+                                        <span id="notificationCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" style="font-size: 0.65rem;">
+                                            0
+                                        </span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end notification-dropdown py-0" aria-labelledby="notificationDropdown">
+                                        <li class="p-2 px-3 border-bottom fw-semibold small d-flex justify-content-between align-items-center" style="background-color: var(--subtle);">
+                                            <span>Thông báo hệ thống</span>
+                                            <span class="badge bg-primary">Trực tuyến</span>
+                                        </li>
+                                        <div id="notificationDropdownList">
+                                            <li class="p-3 text-center text-muted small empty-notification-item">
+                                                Không có thông báo mới
+                                            </li>
+                                        </div>
+                                    </ul>
+                                </div>
+
+                                <!-- User Profile Dropdown -->
+                                <div class="dropdown">
+                                    <button class="btn taskbar-user-btn" 
+                                            type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <span class="avatar-circle" style="width: 26px; height: 26px; font-size: 11px;">
+                                            @(User.Identity.Name?.Length > 0 ? User.Identity.Name.Substring(0, 1).ToUpperInvariant() : "U")
+                                        </span>
+                                        <span class="d-none d-md-inline fw-semibold small">@User.Identity.Name</span>
+                                        <span class="taskbar-role-pill">
+                                            @User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                                        </span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+                                        <li>
+                                            <div class="dropdown-header">
+                                                <strong>@User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value</strong><br/>
+                                                <span class="small text-muted">@User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value</span>
+                                            </div>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item small" asp-controller="Auth" asp-action="ChangePassword">
+                                                <svg class="bi me-2" width="14" height="14"><use xlink:href="#lock-fill"/></svg>Đổi mật khẩu
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form asp-controller="Auth" asp-action="Logout" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item small text-danger fw-semibold">
+                                                    Đăng xuất hệ thống
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- TIER 2: CONTEXTUAL SUB-BAR -->
+            <div class="app-subbar">
+                <div class="subbar-inner px-3 px-lg-4">
+                    <div class="subbar-breadcrumb">
+                        <span class="subbar-workspace-tag">
+                            <svg class="bi" width="12" height="12"><use xlink:href="#shield-check"/></svg>
+                            @roleLabel
+                        </span>
+                        <span class="text-muted">/</span>
+                        <span class="fw-semibold text-body">@pageTitle</span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="subbar-status-indicator d-none d-sm-inline-flex">
+                            <span class="status-dot-live"></span>
+                            <span>Hệ thống trực tuyến</span>
+                        </div>
+
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            @if (User.IsInRole(RoleNames.User) && !(currentController == "Ticket" && currentAction == "Create"))
+                            {
+                                <a asp-controller="Ticket" asp-action="Create" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 py-1 px-3">
+                                    <svg class="bi" width="13" height="13"><use xlink:href="#plus-circle"/></svg>
+                                    <span>Tạo yêu cầu mới</span>
+                                </a>
+                            }
+                            else if (User.IsInRole(RoleNames.Leader) && !(currentController == "Leader" && currentAction == "NewQueue"))
+                            {
+                                <a asp-controller="Leader" asp-action="NewQueue" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-3">
+                                    <svg class="bi" width="13" height="13"><use xlink:href="#ticket-perforated"/></svg>
+                                    <span>Hàng đợi tiếp nhận</span>
+                                </a>
+                            }
+                            else if (User.IsInRole(RoleNames.Staff) && !(currentController == "Staff" && currentAction == "Assigned"))
+                            {
+                                <a asp-controller="Staff" asp-action="Assigned" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-3">
+                                    <svg class="bi" width="13" height="13"><use xlink:href="#ticket-perforated"/></svg>
+                                    <span>Hàng đợi được giao</span>
+                                </a>
+                            }
+                            else if (User.IsInRole(RoleNames.Admin) && !(currentController == "Admin" && currentAction == "CreateUser"))
+                            {
+                                <a asp-controller="Admin" asp-action="CreateUser" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-3">
+                                    <svg class="bi" width="13" height="13"><use xlink:href="#plus-circle"/></svg>
+                                    <span>Thêm người dùng</span>
+                                </a>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- TOAST ALERTS & NOTIFICATIONS CONTAINER -->
+        @await Html.PartialAsync("_ToastAlerts")
+
+        <!-- MAIN BODY -->
+        <main role="main" class="app-canvas container-fluid px-3 px-lg-4 py-4">
+            @RenderBody()
+        </main>
+    }
+    else
+    {
+        <!-- FULL-SCREEN PORTAL MODE -->
+        @await Html.PartialAsync("_ToastAlerts")
+        @RenderBody()
+    }
+
+    <!-- Scripts cục bộ (Zero CDN) -->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/signalr-notification.js" asp-append-version="true"></script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

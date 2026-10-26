@@ -1,0 +1,35 @@
+@{
+    ViewData["Title"] = "Từ chối truy cập (HTTP 403 Forbidden)";
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6 text-center">
+            <div class="card shadow-lg border-0 rounded-4 p-4 p-md-5">
+                <div class="mb-4 text-danger">
+                    <svg class="bi" width="72" height="72"><use xlink:href="#exclamation-triangle-fill"/></svg>
+                </div>
+                <h2 class="fw-bold mb-2">403 - Truy Cập Bị Từ Chối</h2>
+                <h5 class="text-muted mb-4">Bạn không có quyền hạn truy cập tài nguyên hoặc thực hiện thao tác này.</h5>
+                
+                <div class="alert alert-danger-subtle text-danger border border-danger-subtle text-start py-3 mb-4 rounded-3 small">
+                    <strong>Nguyên nhân có thể do:</strong>
+                    <ul class="mb-0 ps-3 mt-1">
+                        <li>Vai trò tài khoản hiện tại của bạn không đủ thẩm quyền truy cập URL này.</li>
+                        <li>Bạn đang cố gắng xem hoặc thao tác trên yêu cầu hỗ trợ (Ticket) thuộc về người khác (Vi phạm BOLA / IDOR).</li>
+                        <li>Phiên làm việc của bạn đã hết hạn hoặc đã bị vô hiệu hóa bởi Quản trị viên.</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex justify-content-center gap-2">
+                    <a href="javascript:history.back()" class="btn btn-outline-secondary px-4">
+                        &larr; Quay lại trang trước
+                    </a>
+                    <a asp-controller="Home" asp-action="Index" class="btn btn-primary px-4">
+                        Về trang chủ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

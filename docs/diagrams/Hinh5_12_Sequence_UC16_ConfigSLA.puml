@@ -1,0 +1,90 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    ActorBackgroundColor #EFF6FF
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Trưởng nhóm / Admin\n(Leader / Admin)" as Leader #FEFCE8
+
+box "Mẫu Decorator & Bộ điều khiển" #FAFAFA
+participant "AuthorizeRolesAttribute\n<<GoF Decorator>>" as Filter #FEFCE8
+participant "LeaderController" as Controller #EFF6FF
+end box
+
+box "Tầng Dữ liệu CSDL EF Core 9" #FAFAFA
+participant "ItTmsDbContext" as DbContext #F1F5F9
+end box
+
+box "Bộ phân tích Tính toán SLA & Thống kê" #FAFAFA
+participant "SLA Engine\n(LINQ Aggregates)" as SlaEngine #FEFCE8
+participant "LeaderDashboardViewModel" as ViewModel #EFF6FF
+end box
+
+participant "Leader/Dashboard.cshtml\n(Razor View UI)" as ViewUI #F8FAFC
+
+Leader -> Controller : GET /Leader/Dashboard
+activate Leader
+activate Controller #EFF6FF
+
+Controller -> Filter : OnActionExecutionAsync(context)
+activate Filter #FEFCE8
+Filter --> Controller : Next() - Xác thực vai trò Leader/Admin hợp lệ
+deactivate Filter
+
+' Truy vấn dữ liệu bất đồng bộ không khóa (AsNoTracking)
+Controller -> DbContext : Tickets.AsNoTracking().Include(Status).Include(AssignedTo).ToListAsync()
+activate DbContext #F1F5F9
+DbContext --> Controller : allTickets
+deactivate DbContext
+
+Controller -> DbContext : Users.AsNoTracking().Where(Role == Staff && Status == Active).ToListAsync()
+activate DbContext #F1F5F9
+DbContext --> Controller : staffUsers
+deactivate DbContext
+
+' Tính toán chỉ số cam kết SLA
+Controller -> SlaEngine : Phân tích trạng thái vi phạm SLA (Breached SLA)
+activate SlaEngine #FEFCE8
+note over SlaEngine #F1F5F9
+  <b>Công thức kiểm tra vi phạm SLA:</b>
+  (t.ResolvedAt > t.DueAt) HOẶC
+  (!t.ResolvedAt && Status != Closed/Rejected && UtcNow > t.DueAt)
+end note
+
+SlaEngine -> SlaEngine : Đếm breachedSlaCount
+SlaEngine -> SlaEngine : Tính SlaComplianceRate = (total - breached) / total * 100%
+SlaEngine -> SlaEngine : Tổng hợp tải công việc nhân viên (StaffWorkloads)
+SlaEngine -> SlaEngine : Phân bổ theo phân loại sự cố (CategoryDistribution)
+SlaEngine -> SlaEngine : Trích xuất 10 yêu cầu khẩn cấp nhất (UrgentTickets theo DueAt)
+SlaEngine --> Controller : Các chỉ số KPI & SLA đã phân tích
+deactivate SlaEngine
+
+Controller -> ViewModel : new LeaderDashboardViewModel(...)
+activate ViewModel #EFF6FF
+ViewModel --> Controller : model
+deactivate ViewModel
+
+Controller -> ViewUI : View(model)
+activate ViewUI #F8FAFC
+ViewUI --> Leader : Hiển thị Dashboard chỉ huy: Thẻ KPI, Tỷ lệ SLA %, Biểu đồ phân loại & Hàng đợi khẩn cấp
+deactivate ViewUI
+deactivate Controller
+deactivate Leader
+
+@enduml

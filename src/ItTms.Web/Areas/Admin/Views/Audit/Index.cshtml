@@ -1,0 +1,205 @@
+@model AuditFilterViewModel
+@{
+    ViewData["Title"] = "Nhật ký kiểm toán";
+    var distinctActions = ViewBag.DistinctActions as List<string> ?? new List<string>();
+}
+
+<div class="row align-items-center mb-4">
+    <div class="col-md-8">
+        <h3 class="fw-bold mb-0">Nhật ký kiểm toán</h3>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <a asp-action="Index" class="btn btn-outline-secondary rounded-3 shadow-sm">
+            <svg class="bi me-1" width="16" height="16"><use xlink:href="#arrow-clockwise"/></svg>
+            Làm mới danh sách
+        </a>
+    </div>
+</div>
+
+<!-- BỘ LỌC NHẬT KÝ -->
+<div class="card border-0 shadow-sm rounded-4 mb-4 bg-body">
+    <div class="card-body p-4">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Loại hành động:</label>
+                <input type="text" name="actionType" value="@Model.ActionType" list="actionList" class="form-control rounded-3" placeholder="Nhập hoặc chọn hành động..." />
+                <datalist id="actionList">
+                    @foreach (var act in distinctActions)
+                    {
+                        <option value="@act">@act</option>
+                    }
+                </datalist>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Mã Người dùng (ID):</label>
+                <input type="number" name="userId" value="@Model.UserId" class="form-control rounded-3" placeholder="ID người dùng" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Từ ngày:</label>
+                <input type="date" name="fromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" class="form-control rounded-3" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Đến ngày:</label>
+                <input type="date" name="toDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" class="form-control rounded-3" />
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1 rounded-3 shadow-sm">
+                    <svg class="bi me-1" width="16" height="16"><use xlink:href="#funnel"/></svg>
+                    Lọc dữ liệu
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary rounded-3">Xóa lọc</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- BẢNG DANH SÁCH NHẬT KÝ -->
+<div class="card border-0 shadow-sm rounded-4 bg-body">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small">
+                    <tr>
+                        <th class="ps-4" style="width: 8%;">ID</th>
+                        <th style="width: 15%;">Thời gian</th>
+                        <th style="width: 15%;">Người thực hiện</th>
+                        <th style="width: 15%;">Hành động</th>
+                        <th style="width: 12%;">IP Address</th>
+                        <th style="width: 25%;">Chi tiết tóm tắt</th>
+                        <th class="pe-4 text-end" style="width: 10%;">Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Logs.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                Không có bản ghi kiểm toán nào phù hợp với bộ lọc tìm kiếm.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var log in Model.Logs)
+                        {
+                            var badgeClass = "bg-secondary";
+                            if (log.Action.Contains("LOGIN", StringComparison.OrdinalIgnoreCase)) badgeClass = "bg-info text-dark";
+                            else if (log.Action.Contains("SECURITY", StringComparison.OrdinalIgnoreCase) || log.Action.Contains("DEACTIVATE", StringComparison.OrdinalIgnoreCase)) badgeClass = "bg-danger";
+                            else if (log.Action.Contains("CREATE", StringComparison.OrdinalIgnoreCase)) badgeClass = "bg-success";
+                            else if (log.Action.Contains("UPDATE", StringComparison.OrdinalIgnoreCase) || log.Action.Contains("ASSIGN", StringComparison.OrdinalIgnoreCase)) badgeClass = "bg-secondary-subtle";
+                            else if (log.Action.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase)) badgeClass = "bg-warning text-dark";
+
+                            <tr>
+                                <td class="ps-4 fw-bold font-monospace text-muted">#@log.Id</td>
+                                <td class="small text-muted">@log.FormattedTime</td>
+                                <td>
+                                    <span class="fw-semibold">@log.UserName</span>
+                                    @if (log.UserId.HasValue)
+                                    {
+                                        <small class="text-muted font-monospace">(#@log.UserId)</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @badgeClass rounded-pill px-2 py-1 small">@log.Action</span>
+                                </td>
+                                <td class="font-monospace small text-muted">@(string.IsNullOrEmpty(log.IpAddress) ? "N/A" : log.IpAddress)</td>
+                                <td class="small text-truncate" style="max-width: 280px;" title="@log.Details">
+                                    @log.Details
+                                </td>
+                                <td class="pe-4 text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 btn-view-log" data-log-id="@log.Id">
+                                        Xem
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-transparent border-0 py-3 text-muted small text-end px-4">
+        Hiển thị tối đa 100 bản ghi mới nhất.
+    </div>
+</div>
+
+<!-- MODAL CHI TIẾT NHẬT KÝ -->
+<div class="modal fade" id="logDetailModal" tabindex="-1" aria-labelledby="logDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="logDetailModalLabel">Chi tiết Bản ghi Kiểm toán</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small mb-1">Mã bản ghi:</label>
+                        <p class="fw-bold mb-0" id="modalLogId">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small mb-1">Thời gian ghi nhận:</label>
+                        <p class="fw-semibold mb-0" id="modalLogTime">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small mb-1">Người thực hiện:</label>
+                        <p class="fw-semibold mb-0" id="modalLogUser">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small mb-1">Địa chỉ IP:</label>
+                        <p class="font-monospace mb-0" id="modalLogIp">-</p>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-muted small mb-1">Hành động:</label>
+                        <p class="mb-0"><span class="badge bg-secondary-subtle" id="modalLogAction">-</span></p>
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label text-muted small mb-1">Dữ liệu chi tiết (Details / Payload):</label>
+                    <pre class="bg-body-secondary p-3 rounded-3 border small mb-0 font-monospace text-wrap" style="max-height: 250px; overflow-y: auto;" id="modalLogDetails">-</pre>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary rounded-3" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalElement = document.getElementById('logDetailModal');
+        const modal = new bootstrap.Modal(modalElement);
+
+        document.querySelectorAll('.btn-view-log').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                const logId = this.getAttribute('data-log-id');
+                try {
+                    const response = await fetch(`/Admin/Audit/Details/${logId}`);
+                    if (!response.ok) throw new Error('Không thể tải chi tiết');
+                    const data = await response.json();
+
+                    document.getElementById('modalLogId').textContent = '#' + data.id;
+                    document.getElementById('modalLogTime').textContent = data.createdAt;
+                    document.getElementById('modalLogUser').textContent = data.userName + ' (' + data.userFullName + ')';
+                    document.getElementById('modalLogIp').textContent = data.ipAddress || 'N/A';
+                    document.getElementById('modalLogAction').textContent = data.action;
+
+                    // Format JSON if possible
+                    try {
+                        const parsed = JSON.parse(data.details);
+                        document.getElementById('modalLogDetails').textContent = JSON.stringify(parsed, null, 2);
+                    } catch (e) {
+                        document.getElementById('modalLogDetails').textContent = data.details || '(Không có chi tiết)';
+                    }
+
+                    modal.show();
+                } catch (err) {
+                    alert('Lỗi tải dữ liệu nhật ký: ' + err.message);
+                }
+            });
+        });
+    });
+</script>
+}

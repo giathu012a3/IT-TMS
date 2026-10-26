@@ -1,0 +1,102 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    ActorBackgroundColor #EFF6FF
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Người gửi\n(Sender: User/Staff)" as Sender
+participant "ticket-realtime.js\n(Client Script)" as ClientJS #F8FAFC
+participant "TicketController" as Controller #EFF6FF
+
+box "Mô hình Miền & Mẫu State" #FAFAFA
+participant "Ticket\n<<Context>>" as Ticket #EFF6FF
+participant "ITicketState\n<<State>>" as State #FEFCE8
+end box
+
+box "Tầng Dữ liệu CSDL" #FAFAFA
+participant "ItTmsDbContext" as DbContext #F1F5F9
+end box
+
+box "Điều phối Thời gian thực SignalR" #FAFAFA
+participant "SignalRDispatcher" as Dispatcher #FEFCE8
+participant "TicketHub\n<<SignalR Hub>>" as Hub #EFF6FF
+end box
+
+actor "Người nhận\n(Receiver: Staff/User)" as Receiver #F0FDF4
+
+Sender -> ClientJS : Nhấn phím Enter (không giữ Shift) tại ô nhập chat
+activate Sender
+activate ClientJS #F8FAFC
+
+ClientJS -> Controller : AJAX POST /Ticket/AddComment (id, content)
+activate Controller #EFF6FF
+
+Controller -> DbContext : Tickets.Include(Status).FirstOrDefaultAsync(id)
+activate DbContext #F1F5F9
+DbContext --> Controller : ticket
+deactivate DbContext
+
+' BẢNG 7.2 TC-08: Kiểm tra trạng thái cho phép bình luận qua State Pattern
+Controller -> Ticket : CanComment()
+activate Ticket #EFF6FF
+Ticket -> State : CanComment
+activate State #FEFCE8
+State --> Ticket : canComment (true / false)
+deactivate State
+Ticket --> Controller : canComment
+deactivate Ticket
+
+alt #FEF2F2 BẢNG 7.2 TC-08: Ticket ở trạng thái Resolved / Closed / Rejected (CanComment == false)
+    Controller --> ClientJS : HTTP 400 Bad Request ("Yêu cầu này đã hoàn tất hoặc đóng, không thể gửi thêm bình luận")
+    ClientJS --> Sender : Hiển thị Floating Card cảnh báo lỗi khóa ô chat (TC-08)
+end
+
+opt Ticket đang ở trạng thái Waiting (Chờ thông tin)
+    Controller -> Ticket : StartProgress(userId) [Tự động chuyển về InProgress khi User phản hồi]
+end
+
+Controller -> DbContext : Comment.Create(ticketId, userId, content, isInternal: false)
+Controller -> DbContext : Comments.AddAsync(comment)
+Controller -> DbContext : SaveChangesAsync()
+activate DbContext #F1F5F9
+DbContext --> Controller : comment.Id > 0
+
+Controller -> Ticket : AddDomainEvent(new CommentAddedEvent(comment))
+Controller -> DbContext : SaveChangesAsync()
+
+DbContext -> Dispatcher : HandleCommentAddedAsync(CommentAddedEvent)
+activate Dispatcher #FEFCE8
+
+Dispatcher -> Hub : Clients.Group("ticket_{id}").SendAsync("ReceiveComment", commentDto)
+activate Hub #EFF6FF
+
+Hub --> Receiver : WebSocket Push: Hiển thị bong bóng chat tức thì (0s delay)
+deactivate Hub
+deactivate Dispatcher
+deactivate DbContext
+
+Controller --> ClientJS : JSON Response: { success: true, comment: commentDto }
+deactivate Controller
+
+ClientJS -> ClientJS : Kiểm tra trùng lặp qua data-comment-id (Deduplication)
+ClientJS --> Sender : Hiển thị tin nhắn mượt mà trên khung chat người gửi
+deactivate ClientJS
+deactivate Sender
+
+@enduml

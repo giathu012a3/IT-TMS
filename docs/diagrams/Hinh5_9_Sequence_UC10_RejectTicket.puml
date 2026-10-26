@@ -1,0 +1,109 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    ActorBackgroundColor #EFF6FF
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Trưởng nhóm\n(Leader)" as Leader #FEFCE8
+participant "LeaderController" as Controller #EFF6FF
+
+box "Tầng Dữ liệu CSDL" #FAFAFA
+participant "ItTmsDbContext" as DbContext #F1F5F9
+end box
+
+box "Mẫu State Pattern (Vòng đời Ticket)" #FAFAFA
+participant "Ticket\n<<Context>>" as Ticket #EFF6FF
+participant "InProgressState\n<<ConcreteState>>" as InProgress #F0FDF4
+participant "NewState\n<<ConcreteState>>" as NewState #EFF6FF
+participant "RejectedState\n<<TerminalState>>" as RejectedState #FEF2F2
+end box
+
+box "Điều phối Sự kiện & WebSocket" #FAFAFA
+participant "DomainEventDispatcher" as Dispatcher #FEFCE8
+participant "TicketHub\n<<SignalR Hub>>" as Hub #EFF6FF
+end box
+
+actor "Người dùng\n(User)" as User #EFF6FF
+
+Leader -> Controller : POST /Leader/Reject (TicketId, Reason)
+activate Leader
+activate Controller #EFF6FF
+
+Controller -> Controller : Validate ModelState (Reason >= 5 ký tự)
+Controller -> DbContext : Tickets.Include(Status).FirstOrDefaultAsync(TicketId)
+activate DbContext #F1F5F9
+DbContext --> Controller : ticket
+deactivate DbContext
+
+' Gọi hành vi từ chối qua State Pattern
+Controller -> Ticket : Reject(reason, currentUserId)
+activate Ticket #EFF6FF
+
+alt #FEF2F2 BẢNG 7.2 TC-06: Chặn từ chối ticket đang xử lý (Ticket đang ở InProgressState)
+    Ticket -> InProgress : Reject(ticket, reason)
+    activate InProgress #F0FDF4
+    InProgress --> Ticket : Result.Failure(TicketErrors.CannotRejectInProgress)
+    deactivate InProgress
+    Ticket --> Controller : Result.Failure("Không thể từ chối yêu cầu đang trong tiến trình xử lý")
+    Controller --> Leader : Báo lỗi nghiệp vụ: Chặn từ chối ticket InProgress (TC-06)
+else #F0FDF4 Từ chối hợp lệ khi ticket đang ở NewState
+    Ticket -> NewState : Reject(ticket, reason)
+    activate NewState #EFF6FF
+    NewState -> RejectedState : TransitionTo(RejectedState)
+    NewState -> Ticket : Gán StatusId = 7 (Rejected), RejectionReason = reason
+    NewState -> Ticket : AddDomainEvent(TicketStatusChangedEvent)
+    NewState --> Ticket : Result.Success()
+    deactivate NewState
+
+    Ticket --> Controller : Result.Success()
+    deactivate Ticket
+
+    Controller -> DbContext : SystemLogs.Add("Ticket Rejected", "Leader từ chối: " + reason)
+    Controller -> DbContext : SaveChangesAsync()
+    activate DbContext #F1F5F9
+
+    DbContext -> Dispatcher : DispatchInTransactionAsync(TicketStatusChangedEvent)
+    activate Dispatcher #FEFCE8
+    Dispatcher -> DbContext : Notifications.Add(Tạo thông báo lý do từ chối cho User)
+    deactivate Dispatcher
+
+    DbContext -> DbContext : SQLite Commit
+
+    DbContext -> Dispatcher : DispatchPostCommitAsync(TicketStatusChangedEvent)
+    activate Dispatcher #FEFCE8
+    Dispatcher -> Hub : Clients.Group("ticket_{id}").SendAsync("TicketStatusChanged", statusDto)
+    activate Hub #EFF6FF
+    Hub --> User : WebSocket Broadcast: Cập nhật trạng thái "Đã từ chối"
+    deactivate Hub
+
+    Dispatcher -> Hub : Clients.User(creatorId).SendAsync("ReceiveNotification", notifDto)
+    activate Hub #EFF6FF
+    Hub --> User : WebSocket Push: Floating Card thông báo yêu cầu bị từ chối kèm lý do
+    deactivate Hub
+    deactivate Dispatcher
+
+    DbContext --> Controller : rowsAffected > 0
+    deactivate DbContext
+
+    Controller --> Leader : RedirectToAction("NewQueue") kèm thông báo thành công
+    deactivate Controller
+    deactivate Leader
+end
+
+@enduml

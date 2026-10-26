@@ -1,0 +1,333 @@
+@model TicketDetailsViewModel
+@{
+    ViewData["Title"] = $"Yêu cầu #{Model.Id}: {Model.Title}";
+    var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0";
+}
+
+<div id="ticket-detail-container" data-ticket-id="@Model.Id" data-current-user-id="@currentUserIdStr">
+    <!-- TOP BREADCRUMB & STATUS BAR -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm rounded-pill mb-2">
+                &larr; Quay lại danh sách
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <h3 class="fw-bold mb-0">#@Model.Id: @Model.Title</h3>
+                <span id="ticket-status-badge" class="badge @Model.StatusColorClass fs-6">
+                    @Model.StatusLabel
+                </span>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            @if (Model.StatusId == TicketStatus.Resolved)
+            {
+                <button type="button" class="btn btn-success shadow-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#feedbackModal">
+                    <svg class="bi me-1" width="16" height="16"><use xlink:href="#star-fill"/></svg>
+                    Xác nhận & Đánh giá dịch vụ
+                </button>
+                <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reopenModal">
+                    Yêu cầu xử lý lại
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- MAIN GRID: LEFT (INFO & ATTACHMENTS) & RIGHT (SIGNALR CHAT) -->
+    <div class="row g-4">
+        <!-- LEFT COLUMN: THÔNG TIN CHI TIẾT SỰ CỐ -->
+        <div class="col-lg-7">
+            <!-- THẺ THÔNG TIN CHÍNH -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-body">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3 border-bottom pb-2">Thông tin Sự cố & Tiến độ</h5>
+
+                    <div class="row g-3 mb-3 small">
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Danh mục:</span>
+                            <span class="badge bg-secondary-subtle text-body border">@Model.Category</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Mức ưu tiên:</span>
+                            <span class="badge @(Model.Priority == TicketPriority.Critical ? "bg-danger" : Model.Priority == TicketPriority.High ? "bg-warning" : "bg-secondary-subtle")">
+                                @Model.Priority
+                            </span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Hạn cam kết SLA:</span>
+                            @await Html.PartialAsync("_SlaBadge", (Model.DueAt, Model.StatusId, Model.ResolvedAt))
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Kỹ thuật viên:</span>
+                            <strong>@(Model.AssignedToName ?? "Chưa phân công")</strong>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3 small border-top pt-3">
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted d-block">Thời điểm tạo:</span>
+                            <span>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+                        @if (Model.ResolvedAt.HasValue)
+                        {
+                            <div class="col-6 col-md-4">
+                                <span class="text-muted d-block">Thời điểm giải quyết:</span>
+                                <span>@Model.ResolvedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+                        }
+                        @if (Model.ClosedAt.HasValue)
+                        {
+                            <div class="col-6 col-md-4">
+                                <span class="text-muted d-block">Thời điểm đóng vé:</span>
+                                <span>@Model.ClosedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-2">Mô tả chi tiết:</h6>
+                        <div class="p-3 rounded-3 bg-body-tertiary text-body" style="white-space: pre-line;">@Model.Description.Trim()</div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.RejectionReason))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0 py-2 small">
+                            <strong>Lý do từ chối:</strong> @Model.RejectionReason
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- TỆP TIN ĐÍNH KÈM -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-body">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3 border-bottom pb-2">
+                        <svg class="bi me-2" width="18" height="18"><use xlink:href="#paperclip"/></svg>
+                        Tệp tin đính kèm (@Model.Attachments.Count)
+                    </h5>
+
+                    @if (Model.Attachments.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">Không có tệp đính kèm nào cho yêu cầu này.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var att in Model.Attachments)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                                    <div class="d-flex align-items-center">
+                                        <svg class="bi text-secondary me-2" width="20" height="20"><use xlink:href="#paperclip"/></svg>
+                                        <div>
+                                            <div class="fw-semibold small">@att.OriginalFileName</div>
+                                            <span class="text-muted" style="font-size: 0.75rem;">@att.FileSizeFormatted • @att.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                        </div>
+                                    </div>
+                                    <a asp-action="DownloadAttachment" asp-route-id="@att.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                                        Tải về
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- KẾT QUẢ ĐÁNH GIÁ (NẾU ĐÃ ĐÓNG) -->
+            @if (Model.Feedback != null)
+            {
+                <div class="card border-0 shadow-sm rounded-4 bg-body">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-2">
+                            <svg class="bi me-2" width="20" height="20"><use xlink:href="#star-fill"/></svg>
+                            Đánh giá chất lượng hỗ trợ
+                        </h5>
+                        <div class="mb-2">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <svg class="bi @(i <= Model.Feedback.Rating ? "text-warning" : "text-muted")" width="20" height="20">
+                                    <use xlink:href="#star-fill"/>
+                                </svg>
+                            }
+                            <span class="ms-2 fw-bold">@Model.Feedback.Rating / 5 sao</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.Feedback.Comment))
+                        {
+                            <p class="small text-muted mb-0 fst-italic">"@Model.Feedback.Comment"</p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT COLUMN: SIGNALR CHAT BOX (BÌNH LUẬN THỜI GIAN THỰC) -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 bg-body d-flex flex-column" style="height: 600px;">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 pb-2 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">Trao đổi &amp; Bình luận</h5>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle small">
+                        Trực tuyến
+                    </span>
+                </div>
+
+                <!-- LUỒNG BÌNH LUẬN CUỘN -->
+                <div id="comment-stream-list" class="card-body chat-stream-box flex-grow-1 mx-3 mb-2 p-3">
+                    @if (Model.Comments.Count == 0)
+                    {
+                        <div class="text-center text-muted small py-5 empty-comment-placeholder">
+                            Chưa có bình luận nào. Bạn có thể gửi phản hồi đầu tiên bên dưới.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var c in Model.Comments)
+                        {
+                            var isMe = c.UserId.ToString() == currentUserIdStr;
+                            var bubbleClass = isMe ? "chat-bubble-me" : "chat-bubble-other";
+                            var alignClass = isMe ? "ms-auto text-end" : "me-auto text-start";
+                            var metaAlign = isMe ? "justify-content-end" : "justify-content-start";
+
+                            <div class="mb-3 d-flex flex-column @alignClass" style="max-width: 85%;">
+                                <div class="d-flex align-items-center mb-1 small text-muted @metaAlign">
+                                    <strong>@c.AuthorName</strong>
+                                    <span class="badge bg-secondary-subtle ms-1">@c.AuthorRole</span>
+                                    <span class="ms-2">@c.FormattedTime</span>
+                                </div>
+                                <div class="p-3 rounded-3 @bubbleClass text-start">
+                                    @Html.Raw(Html.Encode(c.Content).Replace("\n", "<br/>"))
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- KHU VỰC GỬI BÌNH LUẬN & CHẶN BÌNH LUẬN KHI RESOLVED/CLOSED/REJECTED (BẢNG 7.2 TC-08) -->
+                <div class="card-footer bg-transparent border-0 p-3">
+                    <!-- KHỐI BÁO KHÓA CHAT NẾU CANCOMMENT == FALSE (TC-08) -->
+                    <div id="comment-locked-notice" class="@(Model.CanComment ? "d-none" : "")">
+                        <div class="alert alert-secondary text-center py-2 mb-0 border-0 rounded-3 small">
+                            <svg class="bi me-1" width="16" height="16"><use xlink:href="#lock-fill"/></svg>
+                            Yêu cầu hiện ở trạng thái <strong>@Model.StatusLabel</strong>. Chức năng gửi bình luận đã bị khóa.
+                        </div>
+                    </div>
+
+                    @if (Model.CanComment)
+                    {
+                        <form id="comment-submit-form" asp-action="AddComment" asp-route-id="@Model.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <div class="input-group">
+                                <textarea id="comment-content-input" name="content" class="form-control rounded-start-3" rows="2" placeholder="Nhập nội dung trao đổi... (Enter gửi)" required></textarea>
+                                <button type="submit" id="comment-submit-btn" class="btn btn-primary px-3 rounded-end-3">
+                                    <svg class="bi me-1" width="16" height="16"><use xlink:href="#send-fill"/></svg>
+                                    Gửi
+                                </button>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL ĐÁNH GIÁ & ĐÓNG TICKET (BẢNG 7.2 TC-09) -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="feedbackModalLabel">
+                    Nghiệm thu & Đánh giá Chất lượng Hỗ trợ
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="CloseAndRate" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="TicketId" value="@Model.Id" />
+                <div class="modal-body py-4">
+                    <p class="small text-muted mb-4">Kỹ thuật viên đã xử lý sự cố hoàn tất. Vui lòng cho biết mức độ hài lòng của bạn:</p>
+
+                    <div class="text-center mb-4">
+                        <input type="hidden" id="ratingInput" name="Rating" value="5" />
+                        <div class="d-inline-flex gap-2" id="starRatingContainer" style="cursor: pointer;">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <svg class="bi text-warning star-icon" data-value="@i" width="36" height="36">
+                                    <use xlink:href="#star-fill"/>
+                                </svg>
+                            }
+                        </div>
+                        <div id="ratingLabel" class="fw-bold mt-2 text-warning fs-6">5 sao - Rất hài lòng</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Ý kiến đóng góp thêm (Tùy chọn):</label>
+                        <textarea name="Comment" class="form-control rounded-3" rows="3" placeholder="Chia sẻ cảm nhận về tốc độ phục vụ và thái độ của kỹ thuật viên..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Để sau</button>
+                    <button type="submit" class="btn btn-success px-4 fw-semibold">
+                        Xác nhận Đóng & Gửi Đánh giá
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL YÊU CẦU XỬ LÝ LẠI (REOPEN) -->
+<div class="modal fade" id="reopenModal" tabindex="-1" aria-labelledby="reopenModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="reopenModalLabel">
+                    Yêu cầu Xử lý lại Sự cố
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="Reopen" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body py-4">
+                    <p class="small text-muted mb-3">Nếu sự cố vẫn chưa được khắc phục triệt để, vui lòng nhập lý do cụ thể để kỹ thuật viên tiếp tục hỗ trợ:</p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Lý do yêu cầu xử lý lại (Bắt buộc):</label>
+                        <textarea name="reason" class="form-control rounded-3" rows="3" placeholder="Điểm nào chưa đạt hoặc sự cố lặp lại..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+                    <button type="submit" class="btn btn-warning px-4 fw-semibold">
+                        Gửi Yêu cầu Xử lý lại
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/ticket-realtime.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const stars = document.querySelectorAll(".star-icon");
+            const ratingInput = document.getElementById("ratingInput");
+            const ratingLabel = document.getElementById("ratingLabel");
+            const labels = ["", "1 sao - Rất không hài lòng", "2 sao - Không hài lòng", "3 sao - Bình thường", "4 sao - Hài lòng", "5 sao - Rất hài lòng"];
+
+            stars.forEach(star => {
+                star.addEventListener("click", function () {
+                    const val = parseInt(this.getAttribute("data-value"));
+                    ratingInput.value = val;
+                    ratingLabel.textContent = labels[val];
+                    stars.forEach(s => {
+                        const sVal = parseInt(s.getAttribute("data-value"));
+                        s.classList.toggle("text-warning", sVal <= val);
+                        s.classList.toggle("text-muted", sVal > val);
+                    });
+                });
+            });
+        });
+    </script>
+}

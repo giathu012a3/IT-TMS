@@ -1,0 +1,91 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    ActorBackgroundColor #EFF6FF
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Quản trị viên\n(Admin)" as Admin #FEF2F2
+
+box "Mẫu Decorator & Bộ điều khiển" #FAFAFA
+participant "AuthorizeRolesAttribute\n<<GoF Decorator / Filter>>" as Filter #FEFCE8
+participant "AdminController" as Controller #EFF6FF
+end box
+
+box "Mẫu Singleton & Mô hình Miền" #FAFAFA
+participant "PasswordHasherService\n<<GoF Singleton>>" as Hasher #FEFCE8
+participant "User\n<<Domain Entity>>" as UserEntity #EFF6FF
+end box
+
+box "Tầng Dữ liệu CSDL" #FAFAFA
+participant "ItTmsDbContext" as DbContext #F1F5F9
+participant "SystemLogs" as SysLog #F1F5F9
+end box
+
+Admin -> Controller : POST /Admin/CreateUser (CreateUserViewModel)
+activate Admin
+activate Controller #EFF6FF
+
+' Mẫu Decorator Pattern kiểm tra phân quyền RBAC
+Controller -> Filter : OnActionExecutionAsync(context)
+activate Filter #FEFCE8
+
+alt #FEF2F2 BẢNG 7.2 TC-02: Truy cập trái phép (Người dùng không có vai trò Admin)
+    Filter --> Admin : HTTP 403 Forbidden (Chuyển hướng trang AccessDenied)
+end
+
+Filter --> Controller : Next() - Phân quyền Admin hợp lệ
+deactivate Filter
+
+Controller -> Controller : Validate ModelState
+
+Controller -> DbContext : Users.AnyAsync(u => u.Username == username || u.Email == email)
+activate DbContext #F1F5F9
+DbContext --> Controller : exists (true / false)
+deactivate DbContext
+
+alt #FEF2F2 Tên đăng nhập hoặc Email đã tồn tại
+    Controller --> Admin : Trả về View(model) kèm lỗi "Tên đăng nhập hoặc Email đã tồn tại"
+end
+
+' Mẫu Singleton Pattern băm mật khẩu bảo mật PBKDF2
+Controller -> Hasher : HashPassword(model.Password)
+activate Hasher #FEFCE8
+Hasher -> Hasher : PBKDF2 HMAC-SHA512 (100,000 iterations, 128-bit salt)
+Hasher --> Controller : passwordHash
+deactivate Hasher
+
+Controller -> UserEntity : User.Create(username, email, passwordHash, fullName, role, department, Active)
+activate UserEntity #EFF6FF
+UserEntity --> Controller : Result<User>.Success(newUser)
+deactivate UserEntity
+
+Controller -> DbContext : Users.AddAsync(newUser)
+Controller -> SysLog : SystemLog.Create("Admin Created User", "Tạo tài khoản: " + username, currentAdminId)
+activate SysLog #F1F5F9
+Controller -> DbContext : SaveChangesAsync()
+activate DbContext #F1F5F9
+DbContext --> Controller : rowsAffected > 0
+deactivate DbContext
+deactivate SysLog
+
+Controller --> Admin : RedirectToAction("Users") kèm thông báo tạo thành công
+deactivate Controller
+deactivate Admin
+
+@enduml

@@ -1,0 +1,282 @@
+@model TicketDetailsViewModel
+@{
+    ViewData["Title"] = $"Giám sát Yêu cầu #{Model.Id}: {Model.Title}";
+    var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0";
+    var staffList = ViewBag.StaffList as IEnumerable<ItTms.Models.Entities.User> ?? Enumerable.Empty<ItTms.Models.Entities.User>();
+}
+
+<div id="ticket-detail-container" data-ticket-id="@Model.Id" data-current-user-id="@currentUserIdStr">
+    <!-- TOP BAR -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm rounded-pill mb-2">
+                &larr; Về danh sách yêu cầu
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <h3 class="fw-bold mb-0">#@Model.Id: @Model.Title</h3>
+                <span id="ticket-status-badge" class="badge @Model.StatusColorClass fs-6">
+                    @Model.StatusLabel
+                </span>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            @if (Model.StatusId == TicketStatus.New)
+            {
+                <a asp-action="NewQueue" class="btn btn-danger shadow-sm">
+                    Đến hàng đợi phân công
+                </a>
+            }
+            else if (Model.StatusId == TicketStatus.Assigned || Model.StatusId == TicketStatus.InProgress || Model.StatusId == TicketStatus.Waiting)
+            {
+                <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reassignModal">
+                    Điều chuyển kỹ thuật viên
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="row g-4">
+        <!-- LEFT: INFO -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-body">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3 border-bottom pb-2">Hồ sơ Quản lý & Giám sát SLA</h5>
+
+                    <div class="row g-3 mb-3 small">
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Người tạo:</span>
+                            <strong>@Model.CreatorName</strong>
+                            <div class="text-muted small">@Model.CreatorEmail</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Phòng ban:</span>
+                            <span>@(Model.CreatorDepartment ?? "N/A")</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Kỹ thuật viên:</span>
+                            <strong>@(Model.AssignedToName ?? "Chưa phân công")</strong>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block">Mức ưu tiên:</span>
+                            <span class="badge @(Model.Priority == TicketPriority.Critical ? "bg-danger" : Model.Priority == TicketPriority.High ? "bg-warning" : "bg-secondary-subtle")">
+                                @Model.Priority
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3 small border-top pt-3">
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted d-block">Thời điểm tạo:</span>
+                            <span>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted d-block">Hạn SLA cam kết:</span>
+                            <span>@Model.DueAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <span class="text-muted d-block">Tình trạng SLA:</span>
+                            @await Html.PartialAsync("_SlaBadge", (Model.DueAt, Model.StatusId, Model.ResolvedAt))
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-2">Nội dung chi tiết sự cố:</h6>
+                        <div class="p-3 rounded-3 bg-body-tertiary text-body" style="white-space: pre-line;">@Model.Description.Trim()</div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.RejectionReason))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0 py-2 small">
+                            <strong>Lý do từ chối:</strong> @Model.RejectionReason
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- TỆP TIN ĐÍNH KÈM -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-body">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3 border-bottom pb-2">
+                        <svg class="bi me-2" width="18" height="18"><use xlink:href="#paperclip"/></svg>
+                        Tệp tin đính kèm (@Model.Attachments.Count)
+                    </h5>
+
+                    @if (Model.Attachments.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">Không có tệp đính kèm nào.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var att in Model.Attachments)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                                    <div class="d-flex align-items-center">
+                                        <svg class="bi text-secondary me-2" width="20" height="20"><use xlink:href="#paperclip"/></svg>
+                                        <div>
+                                            <div class="fw-semibold small">@att.OriginalFileName</div>
+                                            <span class="text-muted" style="font-size: 0.75rem;">@att.FileSizeFormatted • @att.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                        </div>
+                                    </div>
+                                    <a asp-controller="Ticket" asp-action="DownloadAttachment" asp-route-id="@att.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                                        Tải về
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- ĐÁNH GIÁ CHẤT LƯỢNG -->
+            @if (Model.Feedback != null)
+            {
+                <div class="card border-0 shadow-sm rounded-4 bg-body">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-2">
+                            <svg class="bi me-2" width="20" height="20"><use xlink:href="#star-fill"/></svg>
+                            Đánh giá từ khách hàng
+                        </h5>
+                        <div class="mb-2">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <svg class="bi @(i <= Model.Feedback.Rating ? "text-warning" : "text-muted")" width="20" height="20">
+                                    <use xlink:href="#star-fill"/>
+                                </svg>
+                            }
+                            <span class="ms-2 fw-bold">@Model.Feedback.Rating / 5 sao</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.Feedback.Comment))
+                        {
+                            <p class="small text-muted mb-0 fst-italic">"@Model.Feedback.Comment"</p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT: SIGNALR CHAT -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 bg-body d-flex flex-column" style="height: 600px;">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 pb-2 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">Luồng Trao đổi & Ghi chú</h5>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle small">
+                        Trực tuyến
+                    </span>
+                </div>
+
+                <div id="comment-stream-list" class="card-body chat-stream-box flex-grow-1 mx-3 mb-2 p-3">
+                    @if (Model.Comments.Count == 0)
+                    {
+                        <div class="text-center text-muted small py-5 empty-comment-placeholder">
+                            Chưa có bình luận nào.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var c in Model.Comments)
+                        {
+                            var isMe = c.UserId.ToString() == currentUserIdStr;
+                            var bubbleClass = c.IsInternal 
+                                ? "chat-bubble-internal" 
+                                : (isMe ? "chat-bubble-me" : "chat-bubble-other");
+                            var alignClass = isMe ? "ms-auto text-end" : "me-auto text-start";
+                            var metaAlign = isMe ? "justify-content-end" : "justify-content-start";
+
+                            <div class="mb-3 d-flex flex-column @alignClass" style="max-width: 85%;">
+                                <div class="d-flex align-items-center mb-1 small text-muted @metaAlign">
+                                    @if (c.IsInternal)
+                                    {
+                                        <span class="badge bg-warning me-1">Nội bộ IT</span>
+                                    }
+                                    <strong>@c.AuthorName</strong>
+                                    <span class="badge bg-secondary-subtle ms-1">@c.AuthorRole</span>
+                                    <span class="ms-2">@c.FormattedTime</span>
+                                </div>
+                                <div class="p-3 rounded-3 @bubbleClass text-start">
+                                    @Html.Raw(Html.Encode(c.Content).Replace("\n", "<br/>"))
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="card-footer bg-transparent border-0 p-3">
+                    <div id="comment-locked-notice" class="@(Model.CanComment ? "d-none" : "")">
+                        <div class="alert alert-secondary text-center py-2 mb-0 border-0 rounded-3 small">
+                            <svg class="bi me-1" width="16" height="16"><use xlink:href="#lock-fill"/></svg>
+                            Yêu cầu hiện ở trạng thái <strong>@Model.StatusLabel</strong>. Chức năng bình luận đã bị khóa.
+                        </div>
+                    </div>
+
+                    @if (Model.CanComment)
+                    {
+                        <form id="comment-submit-form" asp-action="AddComment" asp-route-id="@Model.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="is-internal-checkbox" name="isInternal" value="true">
+                                <label class="form-check-label small fw-semibold text-warning-emphasis" for="is-internal-checkbox">
+                                    <svg class="bi me-1" width="14" height="14"><use xlink:href="#lock-fill"/></svg>
+                                    Ghi chú nội bộ (Khách không nhìn thấy)
+                                </label>
+                            </div>
+                            <div class="input-group">
+                                <textarea id="comment-content-input" name="content" class="form-control rounded-start-3" rows="2" placeholder="Nhập nội dung trao đổi hoặc chỉ đạo... (Enter gửi)" required></textarea>
+                                <button type="submit" id="comment-submit-btn" class="btn btn-primary px-3 rounded-end-3">
+                                    <svg class="bi me-1" width="16" height="16"><use xlink:href="#send-fill"/></svg>
+                                    Gửi
+                                </button>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL ĐIỀU CHUYỂN KỸ THUẬT VIÊN -->
+<div class="modal fade" id="reassignModal" tabindex="-1" aria-labelledby="reassignModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="reassignModalLabel">Điều chuyển Kỹ thuật viên Xử lý</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="Reassign" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="TicketId" value="@Model.Id" />
+                <div class="modal-body py-4">
+                    <p class="small text-muted mb-3">
+                        Tái phân công yêu cầu <strong>#@Model.Id - @Model.Title</strong> sang kỹ thuật viên khác:
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Chọn Kỹ thuật viên mới:</label>
+                        <select name="NewStaffId" class="form-select rounded-3" required>
+                            <option value="">-- Chọn kỹ thuật viên mới --</option>
+                            @foreach (var staff in staffList)
+                            {
+                                <option value="@staff.Id" selected="@(staff.Id == Model.AssignedToId ? "selected" : null)">
+                                    @staff.FullName
+                                </option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+                    <button type="submit" class="btn btn-warning px-4 fw-semibold text-dark">
+                        Xác nhận Điều chuyển
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/ticket-realtime.js" asp-append-version="true"></script>
+}

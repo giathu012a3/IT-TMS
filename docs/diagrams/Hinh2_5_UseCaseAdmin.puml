@@ -1,0 +1,85 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+skinparam packageStyle rectangle
+
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #334155
+    FontColor #0F172A
+    FontSize 12
+    FontStyle bold
+}
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #334155
+    BorderThickness 1.2
+    ArrowColor #2563EB
+    FontColor #0F172A
+    FontSize 11
+}
+
+skinparam rectangle {
+    BackgroundColor #FAFAFA
+    BorderColor #94A3B8
+    BorderThickness 1.5
+    FontColor #1E293B
+    FontSize 13
+    FontStyle bold
+}
+
+left to right direction
+
+actor "Quản trị viên\n(Admin)" as Admin #FEF2F2
+
+rectangle "Phân hệ Quản trị & Bảo mật (Admin Subsystem - IT-TMS)" {
+
+    usecase "UC20: Xem Dashboard Quản trị toàn hệ thống\n(Chỉ số User, Ticket, Hoạt động CSDL & Nhật ký)" as UC20_Admin
+    
+    usecase "UC13: Quản lý danh mục người dùng\n(Danh sách sắp xếp theo ID tăng dần)" as UC13
+    usecase "UC14: Khởi tạo tài khoản mới\n(Băm mật khẩu PBKDF2 HMAC-SHA512)" as UC14
+    usecase "Chỉnh sửa thông tin tài khoản\n(Họ tên, phòng ban, vai trò)" as UC_EditUser
+    usecase "UC18: Đặt lại mật khẩu người dùng\n(Reset Password & Ghi log)" as UC18
+    
+    usecase "UC15: Bật/Tắt trạng thái tài khoản\n(Toggle Status: Active <-> Inactive)" as UC15
+    usecase "Chặn tự vô hiệu hóa tài khoản chính mình\n(Ràng buộc bất biến TC-10: Self-Lock Protection)" as UC_SelfLock
+    usecase "Cưỡng chế đăng xuất tức thì qua WebSocket\n(SignalR ForceLogout khi tài khoản bị khóa)" as UC_ForceLogout
+    
+    usecase "Thống kê phân quyền & Vai trò\n(Phân bổ Admin, Leader, Staff, User)" as UC_Roles
+    usecase "Tra cứu nhật ký kiểm toán hệ thống\n(Audit Trail: Lọc theo User, Action, Ngày)" as UC_Audit
+
+    package "Mẫu thiết kế Hướng đối tượng hỗ trợ" #F1F5F9 {
+        usecase "Bảo vệ kiểm soát truy cập RBAC\n(Decorator Pattern - AuthorizeRolesAttribute)" as UC_Decorator
+        usecase "Dịch vụ mã hóa mật khẩu dùng chung\n(Singleton Pattern - PasswordHasherService)" as UC_Singleton
+        usecase "Ghi nhật ký kiểm toán bất biến\n(Observer Pattern - SystemLogObserver)" as UC_SystemLog
+    }
+}
+
+Admin --> UC20_Admin
+Admin --> UC13
+Admin --> UC15
+Admin --> UC_Roles
+Admin --> UC_Audit
+
+' Quan hệ Include & Extend
+UC13 ..> UC14 : <<extend>>
+UC13 ..> UC_EditUser : <<extend>>
+UC13 ..> UC18 : <<extend>>
+
+UC14 ..> UC_Singleton : <<include>>
+UC14 ..> UC_SystemLog : <<include>>
+UC18 ..> UC_Singleton : <<include>>
+UC18 ..> UC_SystemLog : <<include>>
+
+UC15 ..> UC_SelfLock : <<include>>
+UC15 ..> UC_ForceLogout : <<include>>
+UC15 ..> UC_SystemLog : <<include>>
+
+Admin ..> UC_Decorator : <<include - Enforces RBAC on all Admin endpoints>>
+
+@enduml

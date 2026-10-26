@@ -1,0 +1,107 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    ActorBackgroundColor #EFF6FF
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Quản trị viên\n(Admin)" as Admin #FEF2F2
+
+box "Mẫu Decorator & Bộ điều khiển" #FAFAFA
+participant "AuthorizeRolesAttribute\n<<GoF Decorator / Filter>>" as Filter #FEFCE8
+participant "AdminController" as Controller #EFF6FF
+end box
+
+box "Tầng Dữ liệu & Mô hình Miền" #FAFAFA
+participant "ItTmsDbContext" as DbContext #F1F5F9
+participant "User\n<<Domain Entity>>" as UserEntity #EFF6FF
+participant "SystemLogs" as SysLog #F1F5F9
+end box
+
+box "Thời gian thực SignalR" #FAFAFA
+participant "SignalRDispatcher" as Dispatcher #FEFCE8
+participant "TicketHub\n<<SignalR Hub>>" as Hub #EFF6FF
+end box
+
+actor "Tài khoản mục tiêu\n(Target User)" as TargetUser #F8FAFC
+
+Admin -> Controller : POST /Admin/ToggleActive (id = targetUserId)
+activate Admin
+activate Controller #EFF6FF
+
+Controller -> Filter : OnActionExecutionAsync(context)
+activate Filter #FEFCE8
+Filter --> Controller : Next() - Xác thực vai trò Admin hợp lệ
+deactivate Filter
+
+' BẢNG 7.2 TC-10: Chặn tuyệt đối Admin tự vô hiệu hóa chính mình!
+alt #FEF2F2 BẢNG 7.2 TC-10: Admin tự vô hiệu hóa tài khoản của chính mình (id == CurrentUserId)
+    Controller -> Controller : LogWarning("TC-10 Blocked: Admin cố tình tự vô hiệu hóa chính mình")
+    Controller --> Admin : RedirectToAction("Users") kèm lỗi: "Quản trị viên không thể tự vô hiệu hóa chính mình"
+end
+
+Controller -> DbContext : Users.FindAsync(id)
+activate DbContext #F1F5F9
+DbContext --> Controller : targetUser
+deactivate DbContext
+
+alt #FEF2F2 Trạng thái hiện tại: Active -> Vô hiệu hóa sang Inactive
+    Controller -> UserEntity : targetUser.Deactivate(currentAdminId)
+    activate UserEntity #EFF6FF
+    UserEntity -> UserEntity : Gán Status = Inactive, UpdatedAt = UtcNow
+    UserEntity --> Controller : Result.Success()
+    deactivate UserEntity
+
+    Controller -> SysLog : SystemLog.Create("Admin Deactivated User", "Vô hiệu hóa: " + targetUser.Username)
+    activate SysLog #F1F5F9
+    Controller -> DbContext : SaveChangesAsync()
+    activate DbContext #F1F5F9
+    DbContext --> Controller : committed
+    deactivate DbContext
+    deactivate SysLog
+
+    ' Cưỡng chế đăng xuất ngay lập tức qua SignalR WebSocket
+    Controller -> Dispatcher : DispatchForceLogoutAsync(targetUserId, reason)
+    activate Dispatcher #FEFCE8
+    Dispatcher -> Hub : Clients.User(targetUserId).SendAsync("ForceLogout", "Tài khoản của bạn đã bị vô hiệu hóa")
+    activate Hub #EFF6FF
+    Hub --> TargetUser : WebSocket Push: Cưỡng chế thu hồi phiên và đẩy về màn hình đăng nhập
+    deactivate Hub
+    deactivate Dispatcher
+
+else #F0FDF4 Trạng thái hiện tại: Inactive -> Kích hoạt lại sang Active
+    Controller -> UserEntity : targetUser.Activate()
+    activate UserEntity #EFF6FF
+    UserEntity -> UserEntity : Gán Status = Active, UpdatedAt = UtcNow
+    UserEntity --> Controller : Result.Success()
+    deactivate UserEntity
+
+    Controller -> SysLog : SystemLog.Create("Admin Activated User", "Kích hoạt lại: " + targetUser.Username)
+    activate SysLog #F1F5F9
+    Controller -> DbContext : SaveChangesAsync()
+    activate DbContext #F1F5F9
+    DbContext --> Controller : committed
+    deactivate DbContext
+    deactivate SysLog
+end
+
+Controller --> Admin : RedirectToAction("Users") kèm thông báo cập nhật trạng thái thành công
+deactivate Controller
+deactivate Admin
+
+@enduml

@@ -1,0 +1,134 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+skinparam packageStyle rectangle
+
+skinparam actor {
+    BackgroundColor #FFFFFF
+    BorderColor #334155
+    FontColor #0F172A
+    FontSize 12
+    FontStyle bold
+}
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #334155
+    BorderThickness 1.2
+    ArrowColor #2563EB
+    FontColor #0F172A
+    FontSize 11
+}
+
+skinparam rectangle {
+    BackgroundColor #FAFAFA
+    BorderColor #94A3B8
+    BorderThickness 1.5
+    FontColor #1E293B
+    FontSize 13
+    FontStyle bold
+}
+
+left to right direction
+
+actor "Khách\n(Guest)" as Guest #F8FAFC
+actor "Người dùng\n(User)" as User #EFF6FF
+actor "Kỹ thuật viên\n(Staff)" as Staff #F0FDF4
+actor "Trưởng nhóm\n(Leader)" as Leader #FEFCE8
+actor "Quản trị viên\n(Admin)" as Admin #FEF2F2
+
+rectangle "Hệ thống Quản lý Yêu cầu Hỗ trợ Kỹ thuật IT (IT-TMS .NET 9)" {
+
+    package "Xác thực & Bảo mật chung (Auth Subsystem)" {
+        usecase "UC01: Đăng nhập hệ thống\n(PBKDF2 HMAC-SHA512)" as UC01
+        usecase "UC05: Đăng xuất\n(Revoke Cookie Session)" as UC05
+        usecase "UC17: Đổi mật khẩu cá nhân" as UC17
+    }
+
+    package "Phân hệ Người dùng (User Subsystem)" {
+        usecase "UC03: Gửi yêu cầu hỗ trợ mới\n(Tự tính hạn SLA theo Priority)" as UC03
+        usecase "UC02: Xem danh sách yêu cầu cá nhân\n(Lọc theo trạng thái)" as UC02
+        usecase "UC08: Xem chi tiết yêu cầu" as UC08_User
+        usecase "UC06: Trao đổi trực tiếp thời gian thực\n(SignalR WebSocket Chat)" as UC06_User
+        usecase "UC19: Nghiệm thu và đóng yêu cầu" as UC19
+        usecase "UC04: Đánh giá chất lượng hỗ trợ (1-5 sao)" as UC04
+        usecase "UC20: Xem Dashboard cá nhân" as UC20_User
+    }
+
+    package "Phân hệ Kỹ thuật viên (Staff Subsystem)" {
+        usecase "UC20: Xem Dashboard Kỹ thuật viên\n(Hàng đợi công việc cá nhân)" as UC20_Staff
+        usecase "UC08: Xem chi tiết yêu cầu được giao\n(Bảo vệ chống BOLA/IDOR)" as UC08_Staff
+        usecase "UC07: Cập nhật trạng thái xử lý\n(InProgress, Waiting, Resolve)" as UC07
+        usecase "UC06: Thảo luận & Ghi chú nội bộ\n(Internal Notes - IsInternal)" as UC06_Staff
+        usecase "UC16: Xem lịch sử hỗ trợ & Đánh giá" as UC16
+    }
+
+    package "Phân hệ Trưởng nhóm (Leader Subsystem)" {
+        usecase "UC11: Xem Dashboard chỉ huy & Giám sát SLA\n(SLA Compliance & Workloads)" as UC11
+        usecase "UC12: Tra cứu đa tiêu chí tất cả yêu cầu" as UC12
+        usecase "UC09: Phân công & Điều chuyển yêu cầu" as UC09
+        usecase "UC10: Từ chối tiếp nhận yêu cầu\n(Chặn từ chối vé đang xử lý - TC-06)" as UC10
+        usecase "UC08: Xem chi tiết toàn diện yêu cầu" as UC08_Leader
+        usecase "UC06: Trao đổi & Ghi chú điều phối" as UC06_Leader
+    }
+
+    package "Phân hệ Quản trị & Kiểm toán (Admin Subsystem)" {
+        usecase "UC20: Xem Dashboard Quản trị toàn hệ thống" as UC20_Admin
+        usecase "UC13: Quản lý người dùng & Phân quyền\n(Sắp xếp ID tăng dần)" as UC13
+        usecase "UC14: Khởi tạo tài khoản mới\n(Băm mật khẩu PBKDF2)" as UC14
+        usecase "UC15: Bật/Tắt kích hoạt tài khoản\n(Chặn tự khóa Admin - TC-10)" as UC15
+        usecase "UC18: Đặt lại mật khẩu tài khoản" as UC18
+        usecase "Tra cứu nhật ký kiểm toán hệ thống\n(Audit Trail - SystemLogs)" as UC_Audit
+    }
+}
+
+' Quan hệ Khách & Xác thực
+Guest --> UC01
+
+' Quyền dùng chung của các Actor đã xác thực
+User --> UC05
+User --> UC17
+Staff --> UC05
+Staff --> UC17
+Leader --> UC05
+Leader --> UC17
+Admin --> UC05
+Admin --> UC17
+
+' Quan hệ Actor User
+User --> UC03
+User --> UC02
+User --> UC08_User
+User --> UC06_User
+User --> UC19
+User --> UC20_User
+UC19 ..> UC04 : <<include>>
+
+' Quan hệ Actor Staff
+Staff --> UC20_Staff
+Staff --> UC08_Staff
+Staff --> UC07
+Staff --> UC06_Staff
+Staff --> UC16
+
+' Quan hệ Actor Leader
+Leader --> UC11
+Leader --> UC12
+Leader --> UC09
+Leader --> UC10
+Leader --> UC08_Leader
+Leader --> UC06_Leader
+
+' Quan hệ Actor Admin
+Admin --> UC20_Admin
+Admin --> UC13
+Admin --> UC15
+Admin --> UC_Audit
+UC13 ..> UC14 : <<extend>>
+UC13 ..> UC18 : <<extend>>
+
+@enduml

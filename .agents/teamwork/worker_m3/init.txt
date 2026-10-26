@@ -1,0 +1,2 @@
+# Worker M3 Workspace
+Working directory for worker_m3 (Frontend Realtime Chat & Enter Shortcut in ticket-realtime.js).

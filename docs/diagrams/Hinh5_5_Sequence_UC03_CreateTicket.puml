@@ -1,0 +1,114 @@
+@startuml
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    ActorBackgroundColor #EFF6FF
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Người dùng\n(User)" as User
+participant "TicketController" as Controller #EFF6FF
+
+box "Tầng Miền Nghiệp vụ (Domain Model)" #FAFAFA
+participant "Ticket\n<<Entity>>" as Ticket #EFF6FF
+end box
+
+box "Tầng Dữ liệu & Điều phối Sự kiện (EF Core 9)" #FAFAFA
+participant "ItTmsDbContext" as DbContext #F1F5F9
+participant "DomainEventDispatcher\n<<2-Phase Dispatcher>>" as Dispatcher #FEFCE8
+participant "NotificationObserver\n<<GoF Observer>>" as NotifObs #F0FDF4
+participant "SystemLogObserver\n<<GoF Observer>>" as LogObs #F0FDF4
+end box
+
+box "Tầng Thời gian thực SignalR" #FAFAFA
+participant "SignalRDispatcher" as SignalR #EFF6FF
+participant "TicketHub\n<<SignalR Hub>>" as Hub #EFF6FF
+end box
+
+actor "Trưởng nhóm\n(Leader)" as Leader #FEFCE8
+
+User -> Controller : POST /Ticket/Create (Title, Description, Priority, Category, Attachment)
+activate User
+activate Controller #EFF6FF
+
+Controller -> Controller : Validate ModelState & CurrentUserId
+
+' BẢNG 7.2 TC-03: Khởi tạo ticket ở trạng thái New & Tính SLA
+Controller -> Ticket : Ticket.Create(title, description, priority, category, userId)
+activate Ticket #EFF6FF
+Ticket -> Ticket : Gán StatusId = 1 (New)
+Ticket -> Ticket : Tính hạn SLA DueAt (Crit: 4h, High: 8h, Med: 24h, Low: 48h)
+Ticket -> Ticket : AddDomainEvent(TicketCreatedEvent)
+Ticket --> Controller : Result<Ticket>.Success(ticket)
+deactivate Ticket
+
+Controller -> DbContext : Tickets.AddAsync(ticket)
+activate DbContext #F1F5F9
+
+' Lưu dữ liệu & Kích hoạt 2-Phase Observer
+Controller -> DbContext : SaveChangesAsync()
+
+note over DbContext, Dispatcher #F1F5F9
+  <b>Pha 1 (In-Transaction):</b> Kích hoạt các Observer ghi nhận CSDL trước khi commit
+end note
+
+DbContext -> Dispatcher : DispatchInTransactionAsync(TicketCreatedEvent)
+activate Dispatcher #FEFCE8
+
+Dispatcher -> NotifObs : HandleAsync(TicketCreatedEvent)
+activate NotifObs #F0FDF4
+NotifObs -> DbContext : Notifications.Add(Tạo thông báo cho tất cả Leader)
+deactivate NotifObs
+
+Dispatcher -> LogObs : HandleAsync(TicketCreatedEvent)
+activate LogObs #F0FDF4
+LogObs -> DbContext : SystemLogs.Add("CreateTicket", "Tạo yêu cầu #" + ticket.Id)
+deactivate LogObs
+
+Dispatcher --> DbContext : Hoàn tất đăng ký các bản ghi liên kết
+deactivate Dispatcher
+
+DbContext -> DbContext : SQLite Transaction Commit (Atomicity)
+DbContext --> Controller : rowsAffected > 0
+
+note over DbContext, SignalR #F1F5F9
+  <b>Pha 2 (Post-Commit):</b> Kích hoạt SignalR đẩy thông báo tức thì qua WebSocket
+end note
+
+DbContext -> SignalR : DispatchPostCommitAsync(TicketCreatedEvent)
+activate SignalR #EFF6FF
+SignalR -> Hub : Clients.Group("role_Leader").SendAsync("ReceiveNotification", notifDto)
+activate Hub #EFF6FF
+Hub --> Leader : WebSocket Push: Floating Card thông báo Ticket mới (TC-03)
+Hub -> Hub : Clients.Group("role_Leader").SendAsync("UpdateUnreadNotificationCount", count)
+deactivate Hub
+deactivate SignalR
+deactivate DbContext
+
+opt Có tệp tin đính kèm (Attachment <= 16MB)
+    Controller -> Controller : Lưu tệp vật lý vào wwwroot/uploads/tickets/{guid}.ext
+    Controller -> DbContext : Attachments.AddAsync(Attachment.Create(...))
+    Controller -> DbContext : SaveChangesAsync()
+end
+
+Controller --> User : RedirectToAction("Details", new { id = ticket.Id })
+deactivate Controller
+
+User --> User : Nhận phản hồi, chuyển đến trang Chi tiết Ticket kèm thông báo thành công
+deactivate User
+
+@enduml

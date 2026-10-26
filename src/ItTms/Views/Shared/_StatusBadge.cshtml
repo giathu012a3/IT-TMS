@@ -1,0 +1,19 @@
+@model (int StatusId, string Label, string? ColorClass)
+
+@{
+    var color = Model.ColorClass ?? Model.StatusId switch
+    {
+        1 => "bg-info-subtle",
+        2 => "bg-info text-dark",
+        3 => "bg-warning text-dark",
+        4 => "bg-secondary",
+        5 => "bg-success",
+        6 => "bg-dark",
+        7 => "bg-danger",
+        _ => "bg-secondary"
+    };
+}
+
+<span class="badge @color shadow-sm">
+    @Model.Label
+</span>

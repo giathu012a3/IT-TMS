@@ -1,0 +1,129 @@
+@model List<TicketListItemViewModel>
+@{
+    ViewData["Title"] = "Danh sách Yêu cầu Hỗ trợ của tôi";
+    var activeTab = ViewBag.ActiveTab as string ?? "all";
+}
+
+<div class="row align-items-center mb-4">
+    <div class="col-md-8">
+        <h3 class="fw-bold mb-0">Yêu cầu của tôi</h3>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <a asp-action="Create" class="btn btn-primary rounded-3 shadow-sm">
+            <svg class="bi me-1" width="16" height="16"><use xlink:href="#plus-circle"/></svg>
+            Tạo Yêu cầu Mới
+        </a>
+    </div>
+</div>
+
+<!-- FILTER TABS -->
+<ul class="nav nav-pills mb-4 bg-body p-2 rounded-4 shadow-sm">
+    <li class="nav-item">
+        <a class="nav-link rounded-3 @(activeTab == "all" ? "active" : "")" asp-action="Index" asp-route-tab="all">
+            Tất cả
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link rounded-3 @(activeTab == "active" ? "active" : "")" asp-action="Index" asp-route-tab="active">
+            Đang xử lý
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link rounded-3 @(activeTab == "resolved" ? "active" : "")" asp-action="Index" asp-route-tab="resolved">
+            Đã giải quyết
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link rounded-3 @(activeTab == "closed" ? "active" : "")" asp-action="Index" asp-route-tab="closed">
+            Đã hoàn tất
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link rounded-3 @(activeTab == "rejected" ? "active" : "")" asp-action="Index" asp-route-tab="rejected">
+            Đã từ chối
+        </a>
+    </li>
+</ul>
+
+<!-- TICKETS TABLE -->
+<div class="card border-0 shadow-sm rounded-4 bg-body">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small">
+                    <tr>
+                        <th class="ps-4">Mã số</th>
+                        <th>Tiêu đề sự cố</th>
+                        <th>Danh mục</th>
+                        <th>Mức ưu tiên</th>
+                        <th>Trạng thái</th>
+                        <th>Hạn cam kết SLA</th>
+                        <th>Kỹ thuật viên</th>
+                        <th class="pe-4 text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                Không có yêu cầu nào trong danh mục này.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var ticket in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-bold font-monospace text-muted">#@ticket.Id</td>
+                                <td>
+                                    <a asp-action="Details" asp-route-id="@ticket.Id" class="fw-semibold text-body text-decoration-none d-block">
+                                        @ticket.Title
+                                    </a>
+                                    <span class="small text-muted">Tạo lúc: @ticket.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                </td>
+                                <td><span class="badge bg-secondary-subtle text-body border">@ticket.Category</span></td>
+                                <td>
+                                    <span class="badge @(ticket.Priority == TicketPriority.Critical ? "bg-danger" : ticket.Priority == TicketPriority.High ? "bg-warning" : "bg-secondary-subtle")">
+                                        @ticket.Priority
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge @ticket.StatusColorClass">@ticket.StatusLabel</span>
+                                </td>
+                                <td>
+                                    @await Html.PartialAsync("_SlaBadge", (ticket.DueAt, ticket.StatusId, ticket.ResolvedAt))
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(ticket.AssignedToName))
+                                    {
+                                        <span class="small fw-semibold">@ticket.AssignedToName</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="small text-muted fst-italic">Chờ phân công</span>
+                                    }
+                                </td>
+                                <td class="pe-4 text-end">
+                                    <div class="d-flex justify-content-end gap-1">
+                                        @if (ticket.StatusId == TicketStatus.Resolved)
+                                        {
+                                            <a asp-action="Details" asp-route-id="@ticket.Id" class="btn btn-sm btn-success shadow-sm">
+                                                <svg class="bi me-1" width="14" height="14"><use xlink:href="#star-fill"/></svg>
+                                                Đánh giá ngay
+                                            </a>
+                                        }
+                                        <a asp-action="Details" asp-route-id="@ticket.Id" class="btn btn-sm btn-outline-secondary">
+                                            Chi tiết
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

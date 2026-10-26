@@ -1,0 +1,84 @@
+@model CreateTicketViewModel
+@{
+    ViewData["Title"] = "Tạo Yêu cầu Hỗ trợ Mới";
+}
+
+<div class="row justify-content-center py-2">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 rounded-4 p-4 p-md-5 bg-body">
+            <div class="d-flex align-items-center mb-4">
+                <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-3 rounded-circle" style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;">
+                    &larr;
+                </a>
+                <div>
+                    <h4 class="fw-bold mb-0">Tạo Yêu cầu Hỗ trợ Kỹ thuật Mới</h4>
+                    <span class="text-muted small">Điền chi tiết sự cố để đội ngũ IT tiếp nhận và xử lý nhanh chóng</span>
+                </div>
+            </div>
+
+            <form asp-action="Create" asp-controller="Ticket" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger small py-2 rounded-3" role="alert"></div>
+
+                <div class="mb-3">
+                    <label asp-for="Title" class="form-label fw-semibold small"></label>
+                    <input asp-for="Title" class="form-control rounded-3" placeholder="Ví dụ: Máy in phòng Kế toán không nhận lệnh in" autofocus />
+                    <span asp-validation-for="Title" class="text-danger small"></span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="Category" class="form-label fw-semibold small"></label>
+                        <select asp-for="Category" class="form-select rounded-3" asp-items="Html.GetEnumSelectList<TicketCategory>()"></select>
+                        <span asp-validation-for="Category" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Priority" class="form-label fw-semibold small"></label>
+                        <select asp-for="Priority" class="form-select rounded-3" id="prioritySelect" asp-items="Html.GetEnumSelectList<TicketPriority>()"></select>
+                        <span asp-validation-for="Priority" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <!-- WIDGET XEM TRƯỚC HẠN CAM KẾT SLA (DUEAT LIVE PREVIEW) -->
+                <div id="slaPreviewBox" class="alert bg-body-tertiary border py-2 px-3 rounded-3 mb-3 d-flex align-items-center small text-body">
+                    <svg class="bi flex-shrink-0 me-2" width="18" height="18"><use xlink:href="#clock"/></svg>
+                    <div>
+                        Thời hạn cam kết xử lý SLA: <strong id="slaHoursText">24 giờ</strong> 
+                        (Dự kiến hoàn thành trước: <strong id="slaDueAtText">--</strong>)
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Description" class="form-label fw-semibold small"></label>
+                    <textarea asp-for="Description" class="form-control rounded-3" rows="5" placeholder="Mô tả cụ thể sự cố: Hiện tượng lỗi, phần mềm đang sử dụng, thời điểm xảy ra lỗi..."></textarea>
+                    <span asp-validation-for="Description" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label asp-for="Attachment" class="form-label fw-semibold small"></label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-body-tertiary">
+                            <svg class="bi" width="16" height="16"><use xlink:href="#paperclip"/></svg>
+                        </span>
+                        <input asp-for="Attachment" type="file" class="form-control rounded-end-3" />
+                    </div>
+                    <span asp-validation-for="Attachment" class="text-danger small"></span>
+                    <div class="form-text small">Hỗ trợ các định dạng ảnh (PNG, JPG), tài liệu (PDF, DOCX, XLSX, TXT) tối đa 16MB.</div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a asp-action="Index" class="btn btn-outline-secondary px-4">Hủy bỏ</a>
+                    <button type="submit" class="btn btn-primary px-4 fw-semibold shadow-sm">
+                        <svg class="bi me-1" width="16" height="16"><use xlink:href="#plus-circle"/></svg>
+                        Gửi yêu cầu hỗ trợ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/sla-calculator.js" asp-append-version="true"></script>
+}

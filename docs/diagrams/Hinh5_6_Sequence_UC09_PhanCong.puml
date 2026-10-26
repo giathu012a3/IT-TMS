@@ -1,0 +1,140 @@
+@startuml Hinh5_6_Sequence_UC09_PhanCong
+!theme plain
+skinparam dpi 300
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundcorner 6
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ActorBorderColor #334155
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F8FAFC
+    ParticipantBorderColor #334155
+    ParticipantBackgroundColor #FFFFFF
+    BoxBorderColor #94A3B8
+    BoxBackgroundColor #F8FAFC
+    GroupBorderColor #334155
+    GroupBackgroundColor #F1F5F9
+}
+
+actor "Trưởng nhóm IT\n(Leader)" as Leader
+participant "LeaderController" as Controller
+
+box "Data & Domain Layer" #F8FAFC
+participant "ItTmsDbContext" as DbContext
+participant "Ticket" as Ticket
+participant "NewState" as NewState
+participant "AssignedState" as AssignedState
+end box
+
+box "Event & Real-time Services" #EFF6FF
+participant "DomainEventDispatcher" as Dispatcher
+participant "NotificationObserver" as NotifObserver
+participant "SystemLogObserver" as LogObserver
+participant "SignalRDispatcher" as SignalRDispatcher
+participant "TicketHub" as Hub
+end box
+
+actor "Kỹ thuật viên\n(Staff)" as Staff
+actor "Người dùng\n(User)" as User
+
+== Bước 1: Tiếp nhận yêu cầu phân công (HTTP POST) ==
+Leader -> Controller : POST /Leader/Assign(TicketId, StaffId)
+activate Controller #EFF6FF
+
+Controller -> Controller : Validate ModelState
+Controller -> DbContext : Tickets.Include(Status).FirstOrDefaultAsync(TicketId)
+activate DbContext #F1F5F9
+DbContext --> Controller : ticket
+deactivate DbContext
+
+Controller -> DbContext : Users.FindAsync(StaffId)
+activate DbContext #F1F5F9
+DbContext --> Controller : staff (Status == Active, Role == Staff)
+deactivate DbContext
+
+== Bước 2: Kích hoạt chuyển trạng thái qua State Pattern ==
+Controller -> Ticket : Assign(StaffId, CurrentUserId)
+activate Ticket #EFF6FF
+
+Ticket -> NewState : Assign(StaffId, leaderId)
+activate NewState #EFF6FF
+
+NewState -> Ticket : AssignedToId = StaffId
+NewState -> Ticket : TransitionTo(new AssignedState(Ticket), leaderId)
+activate Ticket #DBEAFE
+Ticket -> Ticket : _statusId = TicketStatus.Assigned
+Ticket -> Ticket : RenewConcurrencyToken()
+Ticket -> Ticket : AddDomainEvent(TicketStatusChangedEvent)
+deactivate Ticket
+
+NewState -> Ticket : AddDomainEvent(TicketAssignedEvent)
+NewState --> Ticket : Result.Success()
+deactivate NewState
+
+Ticket --> Controller : Result.Success()
+deactivate Ticket
+
+== Bước 3: Giao dịch nguyên tử 2 pha (In-Transaction & Post-Commit) ==
+Controller -> DbContext : SaveChangesAsync()
+activate DbContext #F1F5F9
+
+group Pha 1: In-Transaction Observers (Trước khi Commit CSDL)
+    DbContext -> Dispatcher : DispatchInTransactionAsync(domainEvents)
+    activate Dispatcher #EFF6FF
+    
+    Dispatcher -> NotifObserver : HandleAsync(TicketAssignedEvent)
+    activate NotifObserver #F1F5F9
+    NotifObserver -> DbContext : Notifications.AddRangeAsync(staffNotif, userNotif)
+    deactivate NotifObserver
+    
+    Dispatcher -> LogObserver : HandleAsync(TicketAssignedEvent)
+    activate LogObserver #F1F5F9
+    LogObserver -> DbContext : SystemLogs.AddAsync(auditLog)
+    deactivate LogObserver
+    
+    deactivate Dispatcher
+end
+
+DbContext -> DbContext : base.SaveChangesAsync() (SQLite Atomic Commit)
+
+group Pha 2: Post-Commit SignalR WebSocket Push (Sau khi Commit thành công)
+    DbContext -> Dispatcher : DispatchPostCommitAsync(domainEvents)
+    activate Dispatcher #EFF6FF
+    
+    Dispatcher -> SignalRDispatcher : HandleTicketAssignedAsync(TicketAssignedEvent)
+    activate SignalRDispatcher #EFF6FF
+    
+    SignalRDispatcher -> Hub : Clients.User(staffId).SendAsync("ReceiveNotification", staffNotifDto)
+    activate Hub #EFF6FF
+    Hub --> Staff : WebSocket Push: Chuông & Floating Card Box
+    deactivate Hub
+    
+    SignalRDispatcher -> Hub : Clients.User(creatorId).SendAsync("ReceiveNotification", userNotifDto)
+    activate Hub #EFF6FF
+    Hub --> User : WebSocket Push: Thông báo ticket đã được phân công
+    deactivate Hub
+    
+    Dispatcher -> SignalRDispatcher : HandleStatusChangedAsync(TicketStatusChangedEvent)
+    SignalRDispatcher -> Hub : Clients.Group("ticket_{id}").SendAsync("TicketStatusChanged", statusDto)
+    activate Hub #EFF6FF
+    Hub --> Staff : Cập nhật nhãn trạng thái phòng "ticket_{id}"
+    Hub --> User : Cập nhật nhãn trạng thái phòng "ticket_{id}"
+    deactivate Hub
+    
+    deactivate SignalRDispatcher
+    deactivate Dispatcher
+end
+
+DbContext --> Controller : rowsAffected > 0
+deactivate DbContext
+
+== Bước 4: Điều hướng phản hồi giao diện ==
+Controller -> Controller : TempData["SuccessMessage"] = "Đã phân công thành công"
+Controller --> Leader : RedirectToAction(nameof(NewQueue))
+deactivate Controller
+
+@enduml
