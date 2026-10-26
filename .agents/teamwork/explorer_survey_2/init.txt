@@ -1,2 +1,0 @@
-# Explorer Survey 2 Workspace
-Working directory for survey_explorer_2 (Frontend Views & Palette).

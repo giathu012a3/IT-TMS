@@ -1,2 +1,0 @@
-# Explorer Survey 1 Workspace
-Working directory for survey_explorer_1 (Backend SignalR, Controllers & Events).

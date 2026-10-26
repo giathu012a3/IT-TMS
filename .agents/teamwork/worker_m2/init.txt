@@ -1,2 +1,0 @@
-# Worker M2 Workspace
-Working directory for worker_m2 (Multi-tier Floating Card Box Notification System).

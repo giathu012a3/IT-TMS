@@ -1,2 +1,0 @@
-# Explorer Survey 3 Workspace
-Working directory for survey_explorer_3 (Frontend JS, Toast/Card Box & Test Baseline).
