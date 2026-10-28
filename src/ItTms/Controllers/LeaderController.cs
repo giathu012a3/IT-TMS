@@ -15,8 +15,11 @@ public class LeaderController : BaseController
     }
 
     [HttpGet]
-    [Route("/Leader/Dashboard")]
     [Route("/Leader")]
+    public IActionResult RootRedirect() => RedirectToAction(nameof(Dashboard));
+
+    [HttpGet]
+    [Route("/Leader/Dashboard")]
     [Route("/Leader/Leader/Dashboard")]
     public async Task<IActionResult> Dashboard()
     {
@@ -261,6 +264,10 @@ public class LeaderController : BaseController
     }
 
     [HttpGet]
+    [Route("/Leader/Index")]
+    [Route("/Leader/Tickets")]
+    [Route("/Leader/AllTickets")]
+    [Route("/Leader/LeaderTicket/Index")]
     public async Task<IActionResult> Index(string? keyword, int? statusId, TicketCategory? category, int? staffId)
     {
         var query = _dbContext.Tickets

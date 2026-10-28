@@ -267,38 +267,7 @@
                             <span class="status-dot-live"></span>
                             <span>Hệ thống trực tuyến</span>
                         </div>
-
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            @if (User.IsInRole(RoleNames.User) && !(currentController == "Ticket" && currentAction == "Create"))
-                            {
-                                <a asp-controller="Ticket" asp-action="Create" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 py-1 px-3">
-                                    <svg class="bi" width="13" height="13"><use xlink:href="#plus-circle"/></svg>
-                                    <span>Tạo yêu cầu mới</span>
-                                </a>
-                            }
-                            else if (User.IsInRole(RoleNames.Leader) && !(currentController == "Leader" && currentAction == "NewQueue"))
-                            {
-                                <a asp-controller="Leader" asp-action="NewQueue" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-3">
-                                    <svg class="bi" width="13" height="13"><use xlink:href="#ticket-perforated"/></svg>
-                                    <span>Hàng đợi tiếp nhận</span>
-                                </a>
-                            }
-                            else if (User.IsInRole(RoleNames.Staff) && !(currentController == "Staff" && currentAction == "Assigned"))
-                            {
-                                <a asp-controller="Staff" asp-action="Assigned" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-3">
-                                    <svg class="bi" width="13" height="13"><use xlink:href="#ticket-perforated"/></svg>
-                                    <span>Hàng đợi được giao</span>
-                                </a>
-                            }
-                            else if (User.IsInRole(RoleNames.Admin) && !(currentController == "Admin" && currentAction == "CreateUser"))
-                            {
-                                <a asp-controller="Admin" asp-action="CreateUser" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-3">
-                                    <svg class="bi" width="13" height="13"><use xlink:href="#plus-circle"/></svg>
-                                    <span>Thêm người dùng</span>
-                                </a>
-                            }
-                        }
+                        @await RenderSectionAsync("SubbarActions", required: false)
                     </div>
                 </div>
             </div>
